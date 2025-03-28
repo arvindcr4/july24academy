@@ -1,12 +1,8 @@
+// Updated login route with proper password comparison and JWT token generation
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/database';
 import { cookies } from 'next/headers';
-
-// Simple token generation for demo purposes
-// In production, use a proper JWT library with secure keys
-function generateToken(userId: number): string {
-  return `token_${userId}_${Date.now()}`;
-}
+import { comparePassword, generateToken } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,19 +15,28 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // In a real app, you would hash the password and compare with stored hash
-    // This is simplified for demo purposes
+    // Get user from database
     const user = await db.getUserByEmail(email);
     
-    if (!user || user.password !== password) {
+    if (!user) {
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
       );
     }
     
-    // Generate token and set cookie
-    const token = generateToken(user.id);
+    // Compare password with stored hash
+    const isPasswordValid = await comparePassword(password, user.password);
+    
+    if (!isPasswordValid) {
+      return NextResponse.json(
+        { error: 'Invalid email or password' },
+        { status: 401 }
+      );
+    }
+    
+    // Generate JWT token
+    const token = generateToken(user);
     
     // Set cookie
     cookies().set({

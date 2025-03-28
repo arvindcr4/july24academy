@@ -1,6 +1,8 @@
+// Updated register route with proper password hashing and JWT token generation
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/database';
 import { cookies } from 'next/headers';
+import { hashPassword, generateToken } from '@/lib/auth-utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,17 +25,18 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // In a real app, you would hash the password before storing
-    // This is simplified for demo purposes
+    // Hash the password before storing
+    const hashedPassword = await hashPassword(password);
+    
     const newUser = await db.createUser({
       name,
       email,
-      password,
+      password: hashedPassword, // Store hashed password
       created_at: new Date().toISOString()
     });
     
-    // Generate token and set cookie (same as login)
-    const token = `token_${newUser.id}_${Date.now()}`;
+    // Generate JWT token
+    const token = generateToken(newUser);
     
     // Set cookie
     cookies().set({

@@ -13,7 +13,9 @@
     "lint": "next lint",
     "build:worker": "opennextjs-cloudflare",
     "preview": "opennextjs-cloudflare && wrangler dev",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv env.d.ts"
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv env.d.ts",
+    "postinstall": "node seed-admin.js",
+    "seed": "node seed-admin.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -44,6 +46,7 @@
     "@radix-ui/react-toggle": "^1.1.1",
     "@radix-ui/react-toggle-group": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.6",
+    "bcryptjs": "^3.0.2",
     "caniuse-lite": "1.0.30001281",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -51,6 +54,7 @@
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.5.2",
     "input-otp": "^1.4.2",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.364.0",
     "next": "15.1.4",
     "next-themes": "^0.4.6",
@@ -61,6 +65,7 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "^2.12.4",
     "sonner": "^1.7.2",
+    "sqlite3": "^5.1.7",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",

@@ -1,6 +1,8 @@
+// Updated user route with proper JWT token verification
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/database';
 import { cookies } from 'next/headers';
+import { verifyToken, getUserFromToken } from '@/lib/auth-utils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,17 +16,17 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    // In a real app, you would verify the token
-    // This is simplified for demo purposes
-    const tokenParts = token.split('_');
-    if (tokenParts.length < 2 || !tokenParts[1]) {
+    // Verify the token and get user information
+    const userData = getUserFromToken(token);
+    
+    if (!userData) {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
       );
     }
     
-    const userId = parseInt(tokenParts[1]);
+    const userId = userData.id;
     const user = await db.getUserById(userId);
     
     if (!user) {

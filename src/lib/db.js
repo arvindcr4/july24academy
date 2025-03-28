@@ -1,34 +1,19 @@
-// Mock database client for development and testing
-// In production, this would connect to a real database
+// Environment-aware database configuration
+// This file selects the appropriate database implementation based on the environment
 
-import * as dbFunctions from './database';
+const environment = process.env.NODE_ENV || 'development';
 
-// Create a mock database client that implements all the functions from database.ts
-const db = Object.keys(dbFunctions).reduce((acc, key) => {
-  // Skip the interface and type definitions
-  if (key === 'DB' || key === 'executeQuery') return acc;
-  
-  // Add each function to the db object
-  acc[key] = (...args) => {
-    console.log(`Called ${key} with args:`, args);
-    
-    // Mock implementation for testing
-    if (key === 'getAllCourses') {
-      return { results: [] };
-    }
-    
-    if (key === 'getAllCourseCategories') {
-      return { results: [] };
-    }
-    
-    if (key.startsWith('get')) {
-      return { results: [] };
-    }
-    
-    return { success: true };
-  };
-  
-  return acc;
-}, {});
+let dbModule;
 
-export { db };
+if (environment === 'production') {
+  // Use production database implementation on Render
+  dbModule = require('./production-db');
+  console.log('Using production database configuration');
+} else {
+  // Use development database implementation locally
+  dbModule = require('./real-db');
+  console.log('Using development database configuration');
+}
+
+// Export the appropriate database implementation
+export const db = dbModule.db;
