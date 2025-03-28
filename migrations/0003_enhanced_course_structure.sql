@@ -11,13 +11,7 @@ CREATE TABLE IF NOT EXISTS course_categories (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Add columns to courses table
-ALTER TABLE courses ADD COLUMN category_id INTEGER REFERENCES course_categories(id);
-ALTER TABLE courses ADD COLUMN is_featured BOOLEAN DEFAULT FALSE;
-ALTER TABLE courses ADD COLUMN status TEXT DEFAULT 'published';
-ALTER TABLE courses ADD COLUMN prerequisites TEXT;
-ALTER TABLE courses ADD COLUMN estimated_hours INTEGER DEFAULT 0;
-ALTER TABLE courses ADD COLUMN order_index INTEGER DEFAULT 0;
+-- Columns for courses table already exist, no need to add them again
 
 -- Add course_enrollments table to track user enrollments
 CREATE TABLE IF NOT EXISTS course_enrollments (
@@ -155,7 +149,8 @@ INSERT INTO course_authors (name, bio, avatar_url) VALUES
 INSERT INTO course_author_mappings (course_id, author_id, is_primary) VALUES
 (1, 1, TRUE),
 (2, 1, TRUE),
-(3, 1, TRUE);
+(3, 1, TRUE)
+ON CONFLICT (course_id, author_id) DO NOTHING;
 
 -- Insert sample tags
 INSERT INTO tags (name) VALUES
@@ -166,7 +161,8 @@ INSERT INTO tags (name) VALUES
 ('Intermediate'),
 ('Advanced'),
 ('System Design'),
-('Software Architecture');
+('Software Architecture')
+ON CONFLICT (name) DO NOTHING;
 
 -- Map tags to courses
 INSERT INTO course_tags (course_id, tag_id) VALUES
@@ -175,4 +171,5 @@ INSERT INTO course_tags (course_id, tag_id) VALUES
 (2, 2), -- Calculus I - Calculus
 (2, 5), -- Calculus I - Intermediate
 (3, 3), -- Statistics Essentials - Statistics
-(3, 4); -- Statistics Essentials - Beginner
+(3, 4) -- Statistics Essentials - Beginner
+ON CONFLICT (course_id, tag_id) DO NOTHING;

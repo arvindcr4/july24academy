@@ -1,5 +1,4 @@
 -- Add new tables for MathAcademy-inspired features
-
 -- Create Key Points table
 CREATE TABLE IF NOT EXISTS key_points (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
