@@ -12,6 +12,17 @@ export interface DB {
   key_points: Database;
   prerequisites: Database;
   daily_streaks: Database;
+  course_categories: Database;
+  course_enrollments: Database;
+  course_reviews: Database;
+  course_authors: Database;
+  course_author_mappings: Database;
+  course_resources: Database;
+  tags: Database;
+  course_tags: Database;
+  user_course_notes: Database;
+  user_bookmarks: Database;
+  certificates: Database;
 }
 
 // Helper function to execute SQL queries
@@ -50,7 +61,7 @@ export async function updateUserXP(db: D1Database, userId: number, amount: numbe
 
 // Course-related database functions
 export async function getAllCourses(db: D1Database) {
-  return db.prepare('SELECT * FROM courses ORDER BY id').all();
+  return db.prepare('SELECT * FROM courses ORDER BY order_index, id').all();
 }
 
 export async function getCourseById(db: D1Database, courseId: number) {
@@ -61,6 +72,207 @@ export async function getTopicsByCourseId(db: D1Database, courseId: number) {
   return db.prepare(
     'SELECT * FROM topics WHERE course_id = ? ORDER BY order_index'
   ).bind(courseId).all();
+}
+
+// New function to get all course categories
+export async function getAllCourseCategories(db: D1Database) {
+  return db.prepare('SELECT * FROM course_categories ORDER BY order_index').all();
+}
+
+// New function to get courses by category
+export async function getCoursesByCategory(db: D1Database, categoryId: number) {
+  return db.prepare(
+    'SELECT * FROM courses WHERE category_id = ? ORDER BY order_index, id'
+  ).bind(categoryId).all();
+}
+
+// New function to get featured courses
+export async function getFeaturedCourses(db: D1Database, limit: number = 4) {
+  return db.prepare(
+    'SELECT * FROM courses WHERE is_featured = TRUE ORDER BY order_index, id LIMIT ?'
+  ).bind(limit).all();
+}
+
+// New function to get course authors
+export async function getCourseAuthors(db: D1Database, courseId: number) {
+  return db.prepare(`
+    SELECT ca.* 
+    FROM course_authors ca
+    JOIN course_author_mappings cam ON ca.id = cam.author_id
+    WHERE cam.course_id = ?
+    ORDER BY cam.is_primary DESC
+  `).bind(courseId).all();
+}
+
+// New function to get course resources
+export async function getCourseResources(db: D1Database, courseId: number) {
+  return db.prepare(
+    'SELECT * FROM course_resources WHERE course_id = ? ORDER BY order_index'
+  ).bind(courseId).all();
+}
+
+// New function to get course tags
+export async function getCourseTags(db: D1Database, courseId: number) {
+  return db.prepare(`
+    SELECT t.* 
+    FROM tags t
+    JOIN course_tags ct ON t.id = ct.tag_id
+    WHERE ct.course_id = ?
+  `).bind(courseId).all();
+}
+
+// New function to enroll user in a course
+export async function enrollUserInCourse(db: D1Database, userId: number, courseId: number) {
+  // Check if already enrolled
+  const existing = await db.prepare(
+    'SELECT * FROM course_enrollments WHERE user_id = ? AND course_id = ?'
+  ).bind(userId, courseId).first();
+  
+  if (existing) {
+    // Update last accessed time
+    return db.prepare(
+      'UPDATE course_enrollments SET last_accessed_at = CURRENT_TIMESTAMP WHERE id = ? RETURNING *'
+    ).bind(existing.id).first();
+  } else {
+    // Create new enrollment
+    return db.prepare(
+      'INSERT INTO course_enrollments (user_id, course_id) VALUES (?, ?) RETURNING *'
+    ).bind(userId, courseId).first();
+  }
+}
+
+// New function to update course enrollment progress
+export async function updateCourseEnrollmentProgress(db: D1Database, userId: number, courseId: number, completionPercentage: number) {
+  return db.prepare(`
+    UPDATE course_enrollments 
+    SET completion_percentage = ?, 
+        last_accessed_at = CURRENT_TIMESTAMP,
+        is_completed = CASE WHEN ? >= 100 THEN TRUE ELSE is_completed END,
+        completed_at = CASE WHEN ? >= 100 AND is_completed = FALSE THEN CURRENT_TIMESTAMP ELSE completed_at END
+    WHERE user_id = ? AND course_id = ?
+    RETURNING *
+  `).bind(completionPercentage, completionPercentage, completionPercentage, userId, courseId).first();
+}
+
+// New function to get user's enrolled courses
+export async function getUserEnrolledCourses(db: D1Database, userId: number) {
+  return db.prepare(`
+    SELECT ce.*, c.title, c.description, c.image_url, c.difficulty_level, c.category_id
+    FROM course_enrollments ce
+    JOIN courses c ON ce.course_id = c.id
+    WHERE ce.user_id = ?
+    ORDER BY ce.last_accessed_at DESC
+  `).bind(userId).all();
+}
+
+// New function to add a course review
+export async function addCourseReview(db: D1Database, userId: number, courseId: number, rating: number, reviewText: string) {
+  // Check if already reviewed
+  const existing = await db.prepare(
+    'SELECT * FROM course_reviews WHERE user_id = ? AND course_id = ?'
+  ).bind(userId, courseId).first();
+  
+  if (existing) {
+    // Update existing review
+    return db.prepare(`
+      UPDATE course_reviews 
+      SET rating = ?, review_text = ?, updated_at = CURRENT_TIMESTAMP 
+      WHERE id = ? RETURNING *
+    `).bind(rating, reviewText, existing.id).first();
+  } else {
+    // Create new review
+    return db.prepare(`
+      INSERT INTO course_reviews (user_id, course_id, rating, review_text) 
+      VALUES (?, ?, ?, ?) RETURNING *
+    `).bind(userId, courseId, rating, reviewText).first();
+  }
+}
+
+// New function to get course reviews
+export async function getCourseReviews(db: D1Database, courseId: number) {
+  return db.prepare(`
+    SELECT cr.*, u.username
+    FROM course_reviews cr
+    JOIN users u ON cr.user_id = u.id
+    WHERE cr.course_id = ?
+    ORDER BY cr.created_at DESC
+  `).bind(courseId).all();
+}
+
+// New function to add a user note
+export async function addUserNote(db: D1Database, userId: number, noteText: string, courseId?: number, lessonId?: number) {
+  return db.prepare(`
+    INSERT INTO user_course_notes (user_id, course_id, lesson_id, note_text) 
+    VALUES (?, ?, ?, ?) RETURNING *
+  `).bind(userId, courseId || null, lessonId || null, noteText).first();
+}
+
+// New function to get user notes
+export async function getUserNotes(db: D1Database, userId: number, courseId?: number, lessonId?: number) {
+  let query = 'SELECT * FROM user_course_notes WHERE user_id = ?';
+  const params = [userId];
+  
+  if (courseId) {
+    query += ' AND course_id = ?';
+    params.push(courseId);
+  }
+  
+  if (lessonId) {
+    query += ' AND lesson_id = ?';
+    params.push(lessonId);
+  }
+  
+  query += ' ORDER BY created_at DESC';
+  
+  return db.prepare(query).bind(...params).all();
+}
+
+// New function to add a bookmark
+export async function addBookmark(db: D1Database, userId: number, courseId?: number, lessonId?: number) {
+  return db.prepare(`
+    INSERT INTO user_bookmarks (user_id, course_id, lesson_id) 
+    VALUES (?, ?, ?) RETURNING *
+  `).bind(userId, courseId || null, lessonId || null).first();
+}
+
+// New function to remove a bookmark
+export async function removeBookmark(db: D1Database, bookmarkId: number) {
+  return db.prepare('DELETE FROM user_bookmarks WHERE id = ? RETURNING *').bind(bookmarkId).first();
+}
+
+// New function to get user bookmarks
+export async function getUserBookmarks(db: D1Database, userId: number) {
+  return db.prepare(`
+    SELECT ub.*, 
+           c.title as course_title, 
+           l.title as lesson_title,
+           t.title as topic_title
+    FROM user_bookmarks ub
+    LEFT JOIN courses c ON ub.course_id = c.id
+    LEFT JOIN lessons l ON ub.lesson_id = l.id
+    LEFT JOIN topics t ON l.topic_id = t.id
+    WHERE ub.user_id = ?
+    ORDER BY ub.created_at DESC
+  `).bind(userId).all();
+}
+
+// New function to generate a certificate
+export async function generateCertificate(db: D1Database, userId: number, courseId: number, certificateUrl: string) {
+  return db.prepare(`
+    INSERT INTO certificates (user_id, course_id, certificate_url) 
+    VALUES (?, ?, ?) RETURNING *
+  `).bind(userId, courseId, certificateUrl).first();
+}
+
+// New function to get user certificates
+export async function getUserCertificates(db: D1Database, userId: number) {
+  return db.prepare(`
+    SELECT cert.*, c.title as course_title
+    FROM certificates cert
+    JOIN courses c ON cert.course_id = c.id
+    WHERE cert.user_id = ?
+    ORDER BY cert.issued_at DESC
+  `).bind(userId).all();
 }
 
 // Lesson-related database functions
@@ -117,6 +329,9 @@ export async function markLessonComplete(db: D1Database, userId: number, lessonI
       if (lesson) {
         await updateUserXP(db, userId, lesson.xp_reward, `Completed lesson: ${lesson.title}`);
       }
+      
+      // Update course enrollment progress
+      await updateCourseEnrollmentProgressForLesson(db, userId, lessonId);
     }
     return existing.id;
   } else {
@@ -131,8 +346,46 @@ export async function markLessonComplete(db: D1Database, userId: number, lessonI
       await updateUserXP(db, userId, lesson.xp_reward, `Completed lesson: ${lesson.title}`);
     }
     
+    // Update course enrollment progress
+    await updateCourseEnrollmentProgressForLesson(db, userId, lessonId);
+    
     return result?.id;
   }
+}
+
+// New function to update course enrollment progress when a lesson is completed
+async function updateCourseEnrollmentProgressForLesson(db: D1Database, userId: number, lessonId: number) {
+  // Get the course ID for this lesson
+  const lessonData = await db.prepare(`
+    SELECT t.course_id
+    FROM lessons l
+    JOIN topics t ON l.topic_id = t.id
+    WHERE l.id = ?
+  `).bind(lessonId).first();
+  
+  if (!lessonData?.course_id) return;
+  
+  const courseId = lessonData.course_id;
+  
+  // Calculate completion percentage
+  const progressData = await db.prepare(`
+    SELECT 
+      COUNT(DISTINCT l.id) as total_lessons,
+      COUNT(DISTINCT CASE WHEN up.completed = TRUE THEN l.id END) as completed_lessons
+    FROM lessons l
+    JOIN topics t ON l.topic_id = t.id
+    LEFT JOIN user_progress up ON l.id = up.lesson_id AND up.user_id = ?
+    WHERE t.course_id = ?
+  `).bind(userId, courseId).first();
+  
+  if (!progressData) return;
+  
+  const completionPercentage = progressData.total_lessons > 0 
+    ? (progressData.completed_lessons / progressData.total_lessons) * 100 
+    : 0;
+  
+  // Update enrollment record
+  await updateCourseEnrollmentProgress(db, userId, courseId, completionPercentage);
 }
 
 export async function getUserProgress(db: D1Database, userId: number) {
@@ -295,6 +548,12 @@ export async function getDashboardData(db: D1Database, userId: number) {
     LIMIT 3
   `).bind(userId).all();
   
+  // Get enrolled courses
+  const enrolledCourses = await getUserEnrolledCourses(db, userId);
+  
+  // Get user certificates
+  const certificates = await getUserCertificates(db, userId);
+  
   return {
     user,
     recentProgress: recentProgress.results,
@@ -302,7 +561,9 @@ export async function getDashboardData(db: D1Database, userId: number) {
     courseProgress: courseProgress.results,
     currentStreak,
     weeklyXP: weeklyXP ? weeklyXP.weekly_xp || 0 : 0,
-    recommendedLessons: recommendedLessons.results
+    recommendedLessons: recommendedLessons.results,
+    enrolledCourses: enrolledCourses.results,
+    certificates: certificates.results
   };
 }
 

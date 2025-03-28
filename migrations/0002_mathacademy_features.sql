@@ -41,29 +41,8 @@ CREATE TABLE IF NOT EXISTS practice_attempts (
   FOREIGN KEY (problem_id) REFERENCES practice_problems(id)
 );
 
--- Add difficulty field to practice_problems if not exists
-ALTER TABLE practice_problems ADD COLUMN IF NOT EXISTS difficulty INTEGER DEFAULT 1;
-
--- Add xp_value field to practice_problems if not exists
-ALTER TABLE practice_problems ADD COLUMN IF NOT EXISTS xp_value INTEGER DEFAULT 5;
-
--- Add explanation field to practice_problems if not exists
-ALTER TABLE practice_problems ADD COLUMN IF NOT EXISTS explanation TEXT;
-
--- Add type field to practice_problems if not exists
-ALTER TABLE practice_problems ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'multiple_choice';
-
--- Add tolerance field to practice_problems if not exists (for numeric answers)
-ALTER TABLE practice_problems ADD COLUMN IF NOT EXISTS tolerance REAL DEFAULT 0.001;
-
--- Add streak_days field to users if not exists
-ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_days INTEGER DEFAULT 0;
-
--- Add weekly_goal field to users if not exists
-ALTER TABLE users ADD COLUMN IF NOT EXISTS weekly_goal INTEGER DEFAULT 500;
-
--- Add last_active_date field to users if not exists
-ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_date DATE;
+-- Note: These columns are already added in the initial migration
+-- We're keeping this comment for documentation purposes
 
 -- Sample data for key points
 INSERT INTO key_points (lesson_id, content, order_index) VALUES
