@@ -26,6 +26,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Get user progress if authenticated
     const token = cookies().get('auth_token')?.value;
     let userProgress = null;
+    let problemStats = [];
     
     if (token) {
       // Extract user ID from token (simplified)
@@ -33,12 +34,24 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       if (tokenParts.length >= 2) {
         const userId = parseInt(tokenParts[1]);
         userProgress = await db.getUserPracticeProgress(userId, lessonId);
+        
+        // Get statistics for each problem
+        for (const problem of practiceProblems.results) {
+          const stats = await db.getPracticeProblemStats(userId, problem.id);
+          problemStats.push({
+            problemId: problem.id,
+            totalAttempts: stats?.total_attempts || 0,
+            correctAttempts: stats?.correct_attempts || 0,
+            avgTimeSpent: stats?.avg_time_spent || 0
+          });
+        }
       }
     }
     
     return NextResponse.json({
-      practiceProblems,
-      userProgress
+      practiceProblems: practiceProblems.results,
+      userProgress,
+      problemStats
     });
   } catch (error) {
     console.error('Practice problems error:', error);
@@ -82,11 +95,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const userId = parseInt(tokenParts[1]);
     
     // Get submission data
-    const { problemId, answer } = await request.json();
+    const { problemId, answer, timeSpentSeconds } = await request.json();
     
-    if (!problemId || answer === undefined) {
+    if (!problemId || answer === undefined || timeSpentSeconds === undefined) {
       return NextResponse.json(
-        { error: 'Problem ID and answer are required' },
+        { error: 'Problem ID, answer, and time spent are required' },
         { status: 400 }
       );
     }
@@ -104,13 +117,27 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Check if answer is correct
     const isCorrect = checkAnswer(problem, answer);
     
-    // Record attempt
-    await db.recordPracticeAttempt(userId, problemId, answer, isCorrect);
+    // Record attempt with timing information
+    await db.recordPracticeAttempt(userId, problemId, answer, isCorrect, timeSpentSeconds);
     
     // Award XP if correct
     let xpEarned = 0;
     if (isCorrect) {
-      xpEarned = problem.xp_value || 5; // Default XP value if not specified
+      // Base XP value
+      xpEarned = problem.xp_value || 5;
+      
+      // Bonus XP for fast answers (if completed in less than expected time)
+      const expectedTime = problem.expected_time_seconds || 60;
+      if (timeSpentSeconds < expectedTime) {
+        const speedBonus = Math.floor((1 - timeSpentSeconds / expectedTime) * 5);
+        xpEarned += Math.max(0, speedBonus);
+      }
+      
+      // Bonus XP for difficult problems
+      if (problem.difficulty >= 3) {
+        xpEarned += 5;
+      }
+      
       await db.addXpToUser(userId, xpEarned, `Solved practice problem: ${problem.id}`);
     }
     
@@ -118,13 +145,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const xpHistory = await db.getUserXPHistory(userId);
     const totalXP = xpHistory.reduce((sum, entry) => sum + entry.amount, 0);
     
+    // Get problem statistics
+    const problemStats = await db.getPracticeProblemStats(userId, problemId);
+    
     return NextResponse.json({
       success: true,
       isCorrect,
       xpEarned,
       correctAnswer: isCorrect ? null : problem.correct_answer, // Only send correct answer if wrong
       explanation: problem.explanation,
-      totalXP
+      totalXP,
+      problemStats: {
+        totalAttempts: problemStats?.total_attempts || 0,
+        correctAttempts: problemStats?.correct_attempts || 0,
+        avgTimeSpent: problemStats?.avg_time_spent || 0
+      }
     });
   } catch (error) {
     console.error('Practice submission error:', error);

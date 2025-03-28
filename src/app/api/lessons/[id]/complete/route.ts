@@ -62,12 +62,20 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     await db.completeLessonForUser(userId, lessonId);
     await db.addXpToUser(userId, xpAmount, `Completed lesson: ${lesson.title}`);
     
+    // Update daily streak
+    const currentStreak = await db.updateDailyStreak(userId);
+    
     // Get updated user stats
     const userProgress = await db.getUserProgress(userId);
     const xpHistory = await db.getUserXPHistory(userId);
     const totalXP = xpHistory.reduce((sum, entry) => sum + entry.amount, 0);
-    const dailyStreak = calculateDailyStreak(xpHistory);
     const completedLessons = userProgress.filter(p => p.completed).length;
+    
+    // Get user's learning pace
+    const learningPace = await db.getUserLearningPace(userId);
+    
+    // Get next recommended lesson
+    const nextLesson = await db.getNextLesson(lessonId, lesson.topic_id);
     
     return NextResponse.json({
       success: true,
@@ -75,10 +83,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       xpEarned: xpAmount,
       stats: {
         totalXP,
-        dailyStreak,
+        currentStreak,
         completedLessons,
         totalLessons: userProgress.length,
-      }
+        learningPace: learningPace.lessonsPerDay,
+        estimatedCompletion: calculateEstimatedCompletion(learningPace)
+      },
+      nextLesson
     });
   } catch (error) {
     console.error('Lesson completion error:', error);
@@ -89,45 +100,24 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 }
 
-// Helper function to calculate daily streak (same as in user route)
-function calculateDailyStreak(xpHistory: any[]): number {
-  if (xpHistory.length === 0) return 0;
-  
-  // Sort by date descending
-  const sortedHistory = [...xpHistory].sort((a, b) => 
-    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
-  
-  // Check if there's activity today
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const latestActivity = new Date(sortedHistory[0].created_at);
-  latestActivity.setHours(0, 0, 0, 0);
-  
-  if (latestActivity.getTime() < today.getTime()) {
-    return 0; // Streak broken if no activity today
+// Helper function to calculate estimated completion date
+function calculateEstimatedCompletion(learningPace: any): string {
+  if (!learningPace || learningPace.lessonsPerDay <= 0) {
+    return 'Unknown';
   }
   
-  // Count consecutive days
-  let streak = 1;
-  let currentDate = today;
-  
-  for (let i = 1; i < sortedHistory.length; i++) {
-    const activityDate = new Date(sortedHistory[i].created_at);
-    activityDate.setHours(0, 0, 0, 0);
-    
-    // Check if this activity was on the previous day
-    const previousDay = new Date(currentDate);
-    previousDay.setDate(previousDay.getDate() - 1);
-    
-    if (activityDate.getTime() === previousDay.getTime()) {
-      streak++;
-      currentDate = previousDay;
-    } else if (activityDate.getTime() < previousDay.getTime()) {
-      break; // Streak ended
-    }
+  const remainingLessons = 30 - learningPace.totalCompletedLessons; // Assuming 30 lessons total
+  if (remainingLessons <= 0) {
+    return 'Completed';
   }
   
-  return streak;
+  const daysToCompletion = Math.ceil(remainingLessons / learningPace.lessonsPerDay);
+  const completionDate = new Date();
+  completionDate.setDate(completionDate.getDate() + daysToCompletion);
+  
+  return completionDate.toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
 }

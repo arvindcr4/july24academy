@@ -27,8 +27,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const topic = await db.getTopicById(lesson.topic_id);
     const course = topic ? await db.getCourseById(topic.course_id) : null;
     
-    // Get prerequisites
-    const prerequisites = await db.getLessonPrerequisites(lessonId);
+    // Get prerequisites with details
+    const prerequisites = await db.getLessonPrerequisitesWithDetails(lessonId);
+    
+    // Get key points for the lesson
+    const keyPoints = await db.getLessonKeyPoints(lessonId);
     
     // Get next lesson in sequence
     const nextLesson = await db.getNextLesson(lessonId, lesson.topic_id);
@@ -36,6 +39,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Check if user has completed this lesson
     const token = cookies().get('auth_token')?.value;
     let userProgress = null;
+    let userStreak = 0;
     
     if (token) {
       // Extract user ID from token (simplified)
@@ -43,6 +47,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       if (tokenParts.length >= 2) {
         const userId = parseInt(tokenParts[1]);
         userProgress = await db.getLessonProgress(userId, lessonId);
+        userStreak = await db.getCurrentStreak(userId);
+        
+        // Update user's streak if they're active today
+        await db.updateDailyStreak(userId);
       }
     }
     
@@ -51,8 +59,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       topic,
       course,
       prerequisites,
+      keyPoints,
       nextLesson,
-      userProgress
+      userProgress,
+      userStreak
     });
   } catch (error) {
     console.error('Lesson details error:', error);
