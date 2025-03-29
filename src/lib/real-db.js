@@ -1,158 +1,142 @@
-// Implementation of a real SQLite database connection for July24Academy
-// This replaces the mock implementation in db.js
+// Database implementation using SQLite
+import sqlite3 from 'sqlite3';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import fs from 'fs';
 
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const bcrypt = require('bcryptjs');
+// Get the directory name of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-// Database path - use environment variable in production
-const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'july24academy.db');
+// Database file path
+const dbPath = join(__dirname, '../../database.sqlite');
 
-// Create a database connection
+// Ensure the database directory exists
+const dbDir = dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
+// Initialize SQLite database
 const sqliteDb = new sqlite3.Database(dbPath, (err) => {
   if (err) {
-    console.error('Error connecting to SQLite database:', err.message);
+    console.error('Error opening database:', err.message);
   } else {
     console.log('Connected to the SQLite database');
-    // Initialize database tables if they don't exist
     initializeDatabase();
   }
 });
 
 // Initialize database schema
 function initializeDatabase() {
-  console.log('Initializing database schema...');
-  
-  // Enable foreign keys
-  sqliteDb.run('PRAGMA foreign_keys = ON');
-  
-  // Create users table
-  sqliteDb.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    )
-  `);
-  
-  // Create courses table
-  sqliteDb.run(`
-    CREATE TABLE IF NOT EXISTS courses (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      description TEXT,
-      icon TEXT,
-      order_index INTEGER
-    )
-  `);
-  
-  // Create topics table
-  sqliteDb.run(`
-    CREATE TABLE IF NOT EXISTS topics (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      course_id INTEGER,
-      title TEXT NOT NULL,
-      description TEXT,
-      icon TEXT,
-      order_index INTEGER,
-      estimated_hours REAL,
-      FOREIGN KEY (course_id) REFERENCES courses (id)
-    )
-  `);
-  
-  // Create lessons table
-  sqliteDb.run(`
-    CREATE TABLE IF NOT EXISTS lessons (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      topic_id INTEGER,
-      title TEXT NOT NULL,
-      description TEXT,
-      order_index INTEGER,
-      estimated_minutes INTEGER,
-      xp_reward INTEGER,
-      content TEXT,
-      FOREIGN KEY (topic_id) REFERENCES topics (id)
-    )
-  `);
-  
-  // Create problems table
-  sqliteDb.run(`
-    CREATE TABLE IF NOT EXISTS problems (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      topic_id INTEGER,
-      title TEXT NOT NULL,
-      description TEXT,
-      difficulty TEXT,
-      estimated_minutes INTEGER,
-      xp_reward INTEGER,
-      starter_code TEXT,
-      test_cases TEXT,
-      constraints TEXT,
-      input_format TEXT,
-      output_format TEXT,
-      time_complexity TEXT,
-      space_complexity TEXT,
-      hints TEXT,
-      solution TEXT,
-      FOREIGN KEY (topic_id) REFERENCES topics (id)
-    )
-  `);
-  
-  // Create user_progress table
-  sqliteDb.run(`
-    CREATE TABLE IF NOT EXISTS user_progress (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      lesson_id INTEGER,
-      problem_id INTEGER,
-      completed BOOLEAN DEFAULT 0,
-      xp_earned INTEGER DEFAULT 0,
-      completed_at TEXT,
-      FOREIGN KEY (user_id) REFERENCES users (id),
-      FOREIGN KEY (lesson_id) REFERENCES lessons (id),
-      FOREIGN KEY (problem_id) REFERENCES problems (id)
-    )
-  `);
-  
-  // Create xp_history table
-  sqliteDb.run(`
-    CREATE TABLE IF NOT EXISTS xp_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      amount INTEGER,
-      source TEXT,
-      earned_at TEXT,
-      FOREIGN KEY (user_id) REFERENCES users (id)
-    )
-  `);
-  
-  // Create practice_attempts table
-  sqliteDb.run(`
-    CREATE TABLE IF NOT EXISTS practice_attempts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER,
-      problem_id INTEGER,
-      answer TEXT,
-      is_correct BOOLEAN,
-      time_spent_seconds INTEGER,
-      attempted_at TEXT,
-      FOREIGN KEY (user_id) REFERENCES users (id),
-      FOREIGN KEY (problem_id) REFERENCES problems (id)
-    )
-  `);
+  sqliteDb.serialize(() => {
+    // Create users table
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT DEFAULT 'user',
+        xp INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create courses table
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS courses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        image_url TEXT,
+        difficulty TEXT,
+        category_id INTEGER,
+        order_index INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    
+    // Create topics table
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS topics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        course_id INTEGER,
+        title TEXT NOT NULL,
+        description TEXT,
+        order_index INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (course_id) REFERENCES courses (id)
+      )
+    `);
+    
+    // Create lessons table
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS lessons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        topic_id INTEGER,
+        title TEXT NOT NULL,
+        content TEXT,
+        difficulty INTEGER,
+        xp_reward INTEGER DEFAULT 10,
+        order_index INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (topic_id) REFERENCES topics (id)
+      )
+    `);
+    
+    // Create problems table
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS problems (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        topic_id INTEGER,
+        title TEXT NOT NULL,
+        description TEXT,
+        difficulty INTEGER,
+        xp_reward INTEGER DEFAULT 20,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (topic_id) REFERENCES topics (id)
+      )
+    `);
+    
+    // Create user_progress table
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS user_progress (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        lesson_id INTEGER,
+        completed BOOLEAN DEFAULT FALSE,
+        score INTEGER,
+        completed_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id),
+        FOREIGN KEY (lesson_id) REFERENCES lessons (id)
+      )
+    `);
+    
+    // Create xp_history table
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS xp_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        amount INTEGER,
+        source TEXT,
+        earned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id)
+      )
+    `);
+    
+    console.log('Database schema initialized');
+  });
 }
 
-// Database API
-const db = {
+// Database operations
+export const db = {
   // User functions
-  async createUser(userData) {
+  async createUser(name, email, password) {
     return new Promise((resolve, reject) => {
-      const { name, email, password, created_at } = userData;
-      
       sqliteDb.run(
-        'INSERT INTO users (name, email, password, created_at) VALUES (?, ?, ?, ?)',
+        'INSERT INTO users (name, email, password, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
         [name, email, password, created_at],
         function(err) {
           if (err) {
@@ -343,4 +327,4 @@ const db = {
   }
 };
 
-module.exports = { db };
+export default db;
