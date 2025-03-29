@@ -1,5 +1,4 @@
-// Database implementation for Render.com compatibility
-// This file provides a database implementation that works in both local and Render.com environments
+// Database wrapper to handle SQLite binding issues
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -11,19 +10,15 @@ const __dirname = dirname(__filename);
 // Database file path
 const dbPath = join(__dirname, '../../database.sqlite');
 
-// Mock data path for fallback
-const mockDataPath = join(__dirname, '../../mock-data');
-
 // Ensure the database directory exists
 const dbDir = dirname(dbPath);
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-// Database API implementation
-export const db = await initializeDatabase();
+let db = null;
 
-// Initialize database with fallback for Render.com
+// Initialize database with error handling
 async function initializeDatabase() {
   try {
     // Try to import sqlite3
@@ -33,26 +28,25 @@ async function initializeDatabase() {
     const sqliteDb = new sqlite3.default.Database(dbPath, (err) => {
       if (err) {
         console.error('Error opening database:', err.message);
-        throw err;
       } else {
         console.log('Connected to the SQLite database');
-        initializeSchema(sqliteDb);
+        createTables(sqliteDb);
       }
     });
     
-    // Return real database API
-    return createRealDatabaseAPI(sqliteDb);
+    // Create database API
+    db = createDatabaseAPI(sqliteDb);
+    return db;
   } catch (error) {
-    console.error('Failed to initialize SQLite database:', error.message);
-    console.log('Using mock database implementation for Render.com');
-    
-    // Return mock database API for Render.com
-    return createMockDatabaseAPI();
+    console.error('Failed to initialize SQLite database:', error);
+    // Create a mock database for deployment to continue
+    db = createMockDatabaseAPI();
+    return db;
   }
 }
 
-// Initialize database schema
-function initializeSchema(sqliteDb) {
+// Create database tables
+function createTables(sqliteDb) {
   sqliteDb.serialize(() => {
     // Create users table
     sqliteDb.run(`
@@ -154,8 +148,8 @@ function initializeSchema(sqliteDb) {
   });
 }
 
-// Create real database API with SQLite
-function createRealDatabaseAPI(sqliteDb) {
+// Create database API with real SQLite implementation
+function createDatabaseAPI(sqliteDb) {
   return {
     // User functions
     async createUser(name, email, password) {
@@ -353,12 +347,12 @@ function createRealDatabaseAPI(sqliteDb) {
   };
 }
 
-// Create mock database API for Render.com
+// Create mock database API for when SQLite fails to load
 function createMockDatabaseAPI() {
-  console.log('Using mock database API for Render.com');
+  console.log('Using mock database API for deployment');
   
-  // Try to load mock admin user from JSON file
-  let mockAdminUser = {
+  // Mock admin user for authentication
+  const mockAdminUser = {
     id: 1,
     name: 'Admin User',
     email: 'admin@july24academy.com',
@@ -367,16 +361,6 @@ function createMockDatabaseAPI() {
     xp: 0,
     created_at: new Date().toISOString()
   };
-  
-  try {
-    if (fs.existsSync(join(mockDataPath, 'admin-user.json'))) {
-      const adminData = fs.readFileSync(join(mockDataPath, 'admin-user.json'), 'utf8');
-      mockAdminUser = JSON.parse(adminData);
-      console.log('Loaded mock admin user from file');
-    }
-  } catch (error) {
-    console.error('Error loading mock admin user:', error.message);
-  }
   
   return {
     // User functions
@@ -448,4 +432,8 @@ function createMockDatabaseAPI() {
   };
 }
 
-export default db;
+// Initialize and export database
+const dbPromise = initializeDatabase();
+
+export { dbPromise };
+export default { dbPromise };
