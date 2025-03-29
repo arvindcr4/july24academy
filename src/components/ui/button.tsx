@@ -1,52 +1,48 @@
-import { cn } from '@/lib/utils';
-import { ButtonHTMLAttributes, forwardRef } from 'react';
+"use client";
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'link';
-  size?: 'sm' | 'md' | 'lg';
-  isLoading?: boolean;
-}
+import * as React from "react";
+import { cva } from "class-variance-authority";
+import { cn } from "@/lib/utils";
 
-const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, children, variant = 'primary', size = 'md', isLoading, disabled, ...props }, ref) => {
-    const baseStyles = 'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none';
-    
-    const variants = {
-      primary: 'bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-500',
-      secondary: 'bg-gray-100 text-gray-900 hover:bg-gray-200 focus-visible:ring-gray-500',
-      outline: 'border border-gray-300 bg-transparent hover:bg-gray-100 focus-visible:ring-gray-500',
-      ghost: 'bg-transparent hover:bg-gray-100 focus-visible:ring-gray-500',
-      link: 'bg-transparent underline-offset-4 hover:underline text-blue-600 hover:bg-transparent focus-visible:ring-blue-500',
-    };
-    
-    const sizes = {
-      sm: 'h-9 px-3 text-sm',
-      md: 'h-10 px-4 py-2',
-      lg: 'h-11 px-8 text-lg',
-    };
-    
+const buttonVariants = cva(
+  "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        outline: "border border-input hover:bg-accent hover:text-accent-foreground",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        ghost: "hover:bg-accent hover:text-accent-foreground",
+        link: "underline-offset-4 hover:underline text-primary",
+      },
+      size: {
+        default: "h-10 py-2 px-4",
+        sm: "h-9 px-3 rounded-md",
+        lg: "h-11 px-8 rounded-md",
+        icon: "h-10 w-10",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+);
+
+const Button = React.forwardRef(
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? React.Fragment : "button";
     return (
-      <button
-        className={cn(
-          baseStyles,
-          variants[variant],
-          sizes[size],
-          isLoading && 'opacity-70 cursor-not-allowed',
-          className
-        )}
-        disabled={disabled || isLoading}
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         {...props}
-      >
-        {isLoading ? (
-          <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-t-transparent" />
-        ) : null}
-        {children}
-      </button>
+      />
     );
   }
 );
 
-Button.displayName = 'Button';
+Button.displayName = "Button";
 
-export { Button };
+export { Button, buttonVariants };

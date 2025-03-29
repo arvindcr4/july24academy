@@ -11,8 +11,8 @@
     "build:worker": "opennextjs-cloudflare",
     "preview": "opennextjs-cloudflare && wrangler dev",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv env.d.ts",
-    "postinstall": "node seed-admin.js",
-    "seed": "node seed-admin.js"
+    "postinstall": "node seed-admin.cjs",
+    "seed": "node seed-admin.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

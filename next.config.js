@@ -14,8 +14,10 @@ const nextConfig = {
   },
   // Ensure proper handling of ESM/CJS modules
   experimental: {
-    // Enable if needed for modern features
-    serverActions: true,
+    // Enable server actions
+    serverActions: {
+      allowedOrigins: ["*"]
+    }
   },
   // Ensure proper output directory
   distDir: '.next',
