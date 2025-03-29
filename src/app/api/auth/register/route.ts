@@ -1,6 +1,6 @@
 // Updated register route with proper password hashing and JWT token generation
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/database';
+import { db } from '@/lib';
 import { cookies } from 'next/headers';
 import { hashPassword, generateToken } from '@/lib/auth-utils';
 

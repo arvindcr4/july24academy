@@ -1,6 +1,6 @@
 // Updated user route with proper JWT token verification
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/database';
+import { db } from '@/lib';
 import { cookies } from 'next/headers';
 import { verifyToken, getUserFromToken } from '@/lib/auth-utils';
 

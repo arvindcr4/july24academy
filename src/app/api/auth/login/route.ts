@@ -1,6 +1,6 @@
 // Updated login route with proper password comparison and JWT token generation
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/database';
+import { db } from '@/lib';
 import { cookies } from 'next/headers';
 import { comparePassword, generateToken } from '@/lib/auth-utils';
 
