@@ -4,8 +4,5 @@
 // Export AuthProvider and useAuth
 export { AuthProvider, useAuth } from './auth-context';
 
-// Export any other auth-related utilities
-export { default as AuthContext } from './auth-context';
-
 // Export database client and utilities
-export { db, default as database } from './db';
+export { db } from './db';
