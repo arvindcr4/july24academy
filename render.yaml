@@ -1,3 +1,19 @@
-# Build configuration for Render.com
-build_command: pnpm install && pnpm run build
-start_command: pnpm start
+services:
+  - type: web
+    name: july24academy-app
+    env: node
+    buildCommand: pnpm install && pnpm build
+    startCommand: pnpm start
+    nodeVersion: 20
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DB_PATH
+        value: /data/july24academy.db
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
