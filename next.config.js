@@ -17,11 +17,6 @@ const nextConfig = {
     // Enable if needed for modern features
     serverActions: true,
   },
-  // Ensure proper environment variables are available
-  env: {
-    // Add any environment variables needed for the build
-    NODE_ENV: process.env.NODE_ENV || 'production',
-  },
   // Ensure proper output directory
   distDir: '.next',
 };
