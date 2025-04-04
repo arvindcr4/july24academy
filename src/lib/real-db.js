@@ -1,30 +1,29 @@
 // Database implementation for Render.com compatibility
 // This file provides a database implementation that works in both local and Render.com environments
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+const fs = typeof window === 'undefined' ? require('fs') : null;
+const path = typeof window === 'undefined' ? require('path') : null;
 
-// Get the directory name of the current module
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = typeof window === 'undefined' ? process.cwd() : '';
 
-// Database file path
-const dbPath = join(__dirname, '../../database.sqlite');
+const dbPath = typeof window === 'undefined' ? path.join(__dirname, 'database.sqlite') : '';
 
-// Mock data path for fallback
-const mockDataPath = join(__dirname, '../../mock-data');
+const mockDataPath = typeof window === 'undefined' ? path.join(__dirname, 'mock-data') : '';
 
-// Ensure the database directory exists
-const dbDir = dirname(dbPath);
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+if (typeof window === 'undefined' && fs) {
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
 }
 
 // Database API implementation
-export const db = await initializeDatabase();
+let db;
 
 // Initialize database with fallback for Render.com
 async function initializeDatabase() {
+  if (typeof window !== 'undefined') {
+    return createMockDatabaseAPI();
+  }
   try {
     // Try to import sqlite3
     const sqlite3 = await import('sqlite3');
@@ -369,8 +368,8 @@ function createMockDatabaseAPI() {
   };
   
   try {
-    if (fs.existsSync(join(mockDataPath, 'admin-user.json'))) {
-      const adminData = fs.readFileSync(join(mockDataPath, 'admin-user.json'), 'utf8');
+    if (typeof window === 'undefined' && fs && fs.existsSync(path.join(mockDataPath, 'admin-user.json'))) {
+      const adminData = fs.readFileSync(path.join(mockDataPath, 'admin-user.json'), 'utf8');
       mockAdminUser = JSON.parse(adminData);
       console.log('Loaded mock admin user from file');
     }
@@ -446,6 +445,12 @@ function createMockDatabaseAPI() {
       console.log('Mock: Closing database connection');
     }
   };
+}
+
+if (typeof window === 'undefined') {
+  initializeDatabase().then(result => {
+    db = result;
+  });
 }
 
 export default db;
