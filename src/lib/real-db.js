@@ -5,25 +5,41 @@ const path = typeof window === 'undefined' ? require('path') : null;
 
 const __dirname = typeof window === 'undefined' ? process.cwd() : '';
 
-const dbPath = typeof window === 'undefined' ? path.join(__dirname, 'database.sqlite') : '';
+const dbDir = typeof window === 'undefined' ? path.join(__dirname, 'databases') : '';
+
+const defaultDbPath = typeof window === 'undefined' ? path.join(dbDir, 'default.sqlite') : '';
 
 const mockDataPath = typeof window === 'undefined' ? path.join(__dirname, 'mock-data') : '';
 
 if (typeof window === 'undefined' && fs) {
-  const dbDir = path.dirname(dbPath);
   if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true });
   }
 }
 
+const dbConnections = new Map();
+
 // Database API implementation
-let db;
+let defaultDb;
+
+function getCourseDbPath(courseId) {
+  if (typeof window === 'undefined' && courseId) {
+    return path.join(dbDir, `course_${courseId}.sqlite`);
+  }
+  return defaultDbPath;
+}
 
 // Initialize database with fallback for Render.com
-async function initializeDatabase() {
+async function initializeDatabase(courseId = null) {
   if (typeof window !== 'undefined') {
-    return createMockDatabaseAPI();
+    return createMockDatabaseAPI(courseId);
   }
+  
+  const dbPath = getCourseDbPath(courseId);
+  if (dbConnections.has(dbPath)) {
+    return dbConnections.get(dbPath);
+  }
+  
   try {
     // Try to import sqlite3
     const sqlite3 = await import('sqlite3');
@@ -31,22 +47,26 @@ async function initializeDatabase() {
     // Initialize SQLite database
     const sqliteDb = new sqlite3.default.Database(dbPath, (err) => {
       if (err) {
-        console.error('Error opening database:', err.message);
+        console.error(`Error opening database ${dbPath}:`, err.message);
         throw err;
       } else {
-        console.log('Connected to the SQLite database');
+        console.log(`Connected to the SQLite database at ${dbPath}`);
         initializeSchema(sqliteDb);
       }
     });
     
+    const dbApi = createRealDatabaseAPI(sqliteDb, courseId);
+    
+    dbConnections.set(dbPath, dbApi);
+    
     // Return real database API
-    return createRealDatabaseAPI(sqliteDb);
+    return dbApi;
   } catch (error) {
-    console.error('Failed to initialize SQLite database:', error.message);
+    console.error(`Failed to initialize SQLite database for course ${courseId}:`, error.message);
     console.log('Using mock database implementation for Render.com');
     
     // Return mock database API for Render.com
-    return createMockDatabaseAPI();
+    return createMockDatabaseAPI(courseId);
   }
 }
 
@@ -154,8 +174,10 @@ function initializeSchema(sqliteDb) {
 }
 
 // Create real database API with SQLite
-function createRealDatabaseAPI(sqliteDb) {
+function createRealDatabaseAPI(sqliteDb, courseId = null) {
   return {
+    courseId,
+    
     // User functions
     async createUser(name, email, password) {
       return new Promise((resolve, reject) => {
@@ -234,6 +256,10 @@ function createRealDatabaseAPI(sqliteDb) {
     },
     
     async getCourseById(id) {
+      if (this.courseId && this.courseId === id) {
+        console.log(`Using course-specific database for course ${id}`);
+      }
+      
       return new Promise((resolve, reject) => {
         sqliteDb.get(
           'SELECT * FROM courses WHERE id = ?',
@@ -251,6 +277,10 @@ function createRealDatabaseAPI(sqliteDb) {
     
     // Topic functions
     async getTopicsByCourseId(courseId) {
+      if (this.courseId && this.courseId === courseId) {
+        console.log(`Using course-specific database for topics in course ${courseId}`);
+      }
+      
       return new Promise((resolve, reject) => {
         sqliteDb.all(
           'SELECT * FROM topics WHERE course_id = ? ORDER BY order_index',
@@ -353,8 +383,8 @@ function createRealDatabaseAPI(sqliteDb) {
 }
 
 // Create mock database API for Render.com
-function createMockDatabaseAPI() {
-  console.log('Using mock database API for Render.com');
+function createMockDatabaseAPI(courseId = null) {
+  console.log(`Using mock database API for ${courseId ? `course ${courseId}` : 'default database'}`);
   
   // Try to load mock admin user from JSON file
   let mockAdminUser = {
@@ -378,6 +408,8 @@ function createMockDatabaseAPI() {
   }
   
   return {
+    courseId,
+    
     // User functions
     async createUser(name, email, password) {
       console.log('Mock: Creating user', { name, email });
@@ -407,13 +439,13 @@ function createMockDatabaseAPI() {
     },
     
     async getCourseById(id) {
-      console.log('Mock: Getting course by ID', id);
+      console.log(`Mock: Getting course by ID ${id} from ${this.courseId ? `course-specific database for course ${this.courseId}` : 'default database'}`);
       return null;
     },
     
     // Topic functions
     async getTopicsByCourseId(courseId) {
-      console.log('Mock: Getting topics by course ID', courseId);
+      console.log(`Mock: Getting topics by course ID ${courseId} from ${this.courseId ? `course-specific database for course ${this.courseId}` : 'default database'}`);
       return { results: [] };
     },
     

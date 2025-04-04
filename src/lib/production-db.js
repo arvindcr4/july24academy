@@ -4,14 +4,35 @@
 const fs = typeof window === 'undefined' ? require('fs') : null;
 const path = typeof window === 'undefined' ? require('path') : null;
 
-// Database path from environment variable
-const dbPath = typeof window === 'undefined' 
-  ? (process.env.DB_PATH || path.join(process.cwd(), 'july24academy.db'))
+const dbDir = typeof window === 'undefined' 
+  ? (process.env.DB_DIR || path.join(process.cwd(), 'databases'))
   : '';
 
-let sqliteDb = null;
+const defaultDbPath = typeof window === 'undefined' 
+  ? (process.env.DB_PATH || path.join(dbDir, 'default.db'))
+  : '';
 
-if (typeof window === 'undefined') {
+const dbConnections = new Map();
+
+function getCourseDbPath(courseId) {
+  if (typeof window === 'undefined' && courseId) {
+    return path.join(dbDir, `course_${courseId}.db`);
+  }
+  return defaultDbPath;
+}
+
+let defaultDb = null;
+
+async function initializeDatabase(courseId = null) {
+  if (typeof window !== 'undefined') {
+    return createMockDatabaseAPI(courseId);
+  }
+  
+  const dbPath = getCourseDbPath(courseId);
+  if (dbConnections.has(dbPath)) {
+    return dbConnections.get(dbPath);
+  }
+  
   try {
     // Ensure the database directory exists
     const dbDir = path.dirname(dbPath);
@@ -25,23 +46,30 @@ if (typeof window === 'undefined') {
     const sqlite3 = require('sqlite3').verbose();
     
     // Create a database connection
-    sqliteDb = new sqlite3.Database(dbPath, (err) => {
+    const sqliteDb = new sqlite3.Database(dbPath, (err) => {
       if (err) {
-        console.error('Error connecting to SQLite database:', err.message);
+        console.error(`Error connecting to SQLite database at ${dbPath}:`, err.message);
       } else {
         console.log(`Connected to the SQLite database at ${dbPath}`);
         // Initialize database tables if they don't exist
-        initializeDatabase();
+        initializeDatabaseSchema(sqliteDb);
       }
     });
+    
+    const dbApi = createRealDatabaseAPI(sqliteDb, courseId);
+    
+    dbConnections.set(dbPath, dbApi);
+    
+    return dbApi;
   } catch (error) {
-    console.error('Failed to initialize SQLite in production:', error.message);
+    console.error(`Failed to initialize SQLite in production for course ${courseId}:`, error.message);
     console.log('Will use mock database implementation');
+    return createMockDatabaseAPI(courseId);
   }
 }
 
 // Initialize database schema
-function initializeDatabase() {
+function initializeDatabaseSchema(sqliteDb) {
   console.log('Initializing database schema...');
   
   // Enable foreign keys
@@ -167,207 +195,222 @@ function initializeDatabase() {
   console.log('Database schema initialization complete');
 }
 
-// Database API
-const db = {
-  // User functions
-  async createUser(userData) {
-    return new Promise((resolve, reject) => {
-      const { name, email, password, created_at } = userData;
-      
-      sqliteDb.run(
-        'INSERT INTO users (name, email, password, created_at) VALUES (?, ?, ?, ?)',
-        [name, email, password, created_at],
-        function(err) {
-          if (err) {
-            console.error('Error creating user:', err.message);
-            return reject(err);
-          }
-          
-          // Get the created user
-          sqliteDb.get(
-            'SELECT id, name, email, created_at FROM users WHERE id = ?',
-            [this.lastID],
-            (err, row) => {
-              if (err) {
-                console.error('Error retrieving created user:', err.message);
-                return reject(err);
-              }
-              resolve(row);
+function createRealDatabaseAPI(sqliteDb, courseId = null) {
+  return {
+    courseId,
+    
+    // User functions
+    async createUser(userData) {
+      return new Promise((resolve, reject) => {
+        const { name, email, password, created_at } = userData;
+        
+        sqliteDb.run(
+          'INSERT INTO users (name, email, password, created_at) VALUES (?, ?, ?, ?)',
+          [name, email, password, created_at],
+          function(err) {
+            if (err) {
+              console.error('Error creating user:', err.message);
+              return reject(err);
             }
-          );
-        }
-      );
-    });
-  },
-  
-  async getUserByEmail(email) {
-    return new Promise((resolve, reject) => {
-      sqliteDb.get(
-        'SELECT * FROM users WHERE email = ?',
-        [email],
-        (err, row) => {
-          if (err) {
-            console.error('Error getting user by email:', err.message);
-            return reject(err);
+            
+            // Get the created user
+            sqliteDb.get(
+              'SELECT id, name, email, created_at FROM users WHERE id = ?',
+              [this.lastID],
+              (err, row) => {
+                if (err) {
+                  console.error('Error retrieving created user:', err.message);
+                  return reject(err);
+                }
+                resolve(row);
+              }
+            );
           }
-          resolve(row);
-        }
-      );
-    });
-  },
-  
-  async getUserById(id) {
-    return new Promise((resolve, reject) => {
-      sqliteDb.get(
-        'SELECT * FROM users WHERE id = ?',
-        [id],
-        (err, row) => {
-          if (err) {
-            console.error('Error getting user by ID:', err.message);
-            return reject(err);
+        );
+      });
+    },
+    
+    async getUserByEmail(email) {
+      return new Promise((resolve, reject) => {
+        sqliteDb.get(
+          'SELECT * FROM users WHERE email = ?',
+          [email],
+          (err, row) => {
+            if (err) {
+              console.error('Error getting user by email:', err.message);
+              return reject(err);
+            }
+            resolve(row);
           }
-          resolve(row);
-        }
-      );
-    });
-  },
-  
-  // Course functions
-  async getAllCourses() {
-    return new Promise((resolve, reject) => {
-      sqliteDb.all(
-        'SELECT * FROM courses ORDER BY order_index',
-        (err, rows) => {
-          if (err) {
-            console.error('Error getting all courses:', err.message);
-            return reject(err);
+        );
+      });
+    },
+    
+    async getUserById(id) {
+      return new Promise((resolve, reject) => {
+        sqliteDb.get(
+          'SELECT * FROM users WHERE id = ?',
+          [id],
+          (err, row) => {
+            if (err) {
+              console.error('Error getting user by ID:', err.message);
+              return reject(err);
+            }
+            resolve(row);
           }
-          resolve({ results: rows });
-        }
-      );
-    });
-  },
-  
-  async getCourseById(id) {
-    return new Promise((resolve, reject) => {
-      sqliteDb.get(
-        'SELECT * FROM courses WHERE id = ?',
-        [id],
-        (err, row) => {
-          if (err) {
-            console.error('Error getting course by ID:', err.message);
-            return reject(err);
+        );
+      });
+    },
+    
+    // Course functions
+    async getAllCourses() {
+      return new Promise((resolve, reject) => {
+        sqliteDb.all(
+          'SELECT * FROM courses ORDER BY order_index',
+          (err, rows) => {
+            if (err) {
+              console.error('Error getting all courses:', err.message);
+              return reject(err);
+            }
+            resolve({ results: rows });
           }
-          resolve(row);
-        }
-      );
-    });
-  },
-  
-  // Topic functions
-  async getTopicsByCourseId(courseId) {
-    return new Promise((resolve, reject) => {
-      sqliteDb.all(
-        'SELECT * FROM topics WHERE course_id = ? ORDER BY order_index',
-        [courseId],
-        (err, rows) => {
-          if (err) {
-            console.error('Error getting topics by course ID:', err.message);
-            return reject(err);
-          }
-          resolve({ results: rows });
-        }
-      );
-    });
-  },
-  
-  // Lesson functions
-  async getLessonsByTopicId(topicId) {
-    return new Promise((resolve, reject) => {
-      sqliteDb.all(
-        'SELECT * FROM lessons WHERE topic_id = ? ORDER BY order_index',
-        [topicId],
-        (err, rows) => {
-          if (err) {
-            console.error('Error getting lessons by topic ID:', err.message);
-            return reject(err);
-          }
-          resolve({ results: rows });
-        }
-      );
-    });
-  },
-  
-  // Problem functions
-  async getProblemsByTopicId(topicId) {
-    return new Promise((resolve, reject) => {
-      sqliteDb.all(
-        'SELECT * FROM problems WHERE topic_id = ?',
-        [topicId],
-        (err, rows) => {
-          if (err) {
-            console.error('Error getting problems by topic ID:', err.message);
-            return reject(err);
-          }
-          resolve({ results: rows });
-        }
-      );
-    });
-  },
-  
-  // User progress functions
-  async getUserProgress(userId) {
-    return new Promise((resolve, reject) => {
-      sqliteDb.all(
-        `SELECT up.*, l.title as lesson_title, t.title as topic_title, c.title as course_title
-         FROM user_progress up
-         LEFT JOIN lessons l ON up.lesson_id = l.id
-         LEFT JOIN topics t ON l.topic_id = t.id
-         LEFT JOIN courses c ON t.course_id = c.id
-         WHERE up.user_id = ?
-         ORDER BY up.completed_at DESC`,
-        [userId],
-        (err, rows) => {
-          if (err) {
-            console.error('Error getting user progress:', err.message);
-            return reject(err);
-          }
-          resolve({ results: rows || [] });
-        }
-      );
-    });
-  },
-  
-  async getUserXPHistory(userId) {
-    return new Promise((resolve, reject) => {
-      sqliteDb.all(
-        'SELECT * FROM xp_history WHERE user_id = ? ORDER BY earned_at DESC',
-        [userId],
-        (err, rows) => {
-          if (err) {
-            console.error('Error getting user XP history:', err.message);
-            return reject(err);
-          }
-          resolve({ results: rows || [] });
-        }
-      );
-    });
-  },
-  
-  // Helper function to close the database connection
-  close() {
-    sqliteDb.close((err) => {
-      if (err) {
-        console.error('Error closing database:', err.message);
-      } else {
-        console.log('Database connection closed');
+        );
+      });
+    },
+    
+    async getCourseById(id) {
+      if (this.courseId && this.courseId === id) {
+        console.log(`Using course-specific database for course ${id}`);
       }
-    });
-  }
-};
+      
+      return new Promise((resolve, reject) => {
+        sqliteDb.get(
+          'SELECT * FROM courses WHERE id = ?',
+          [id],
+          (err, row) => {
+            if (err) {
+              console.error('Error getting course by ID:', err.message);
+              return reject(err);
+            }
+            resolve(row);
+          }
+        );
+      });
+    },
+    
+    // Topic functions
+    async getTopicsByCourseId(courseId) {
+      if (this.courseId && this.courseId === courseId) {
+        console.log(`Using course-specific database for topics in course ${courseId}`);
+      }
+      
+      return new Promise((resolve, reject) => {
+        sqliteDb.all(
+          'SELECT * FROM topics WHERE course_id = ? ORDER BY order_index',
+          [courseId],
+          (err, rows) => {
+            if (err) {
+              console.error('Error getting topics by course ID:', err.message);
+              return reject(err);
+            }
+            resolve({ results: rows });
+          }
+        );
+      });
+    },
+    
+    // Lesson functions
+    async getLessonsByTopicId(topicId) {
+      return new Promise((resolve, reject) => {
+        sqliteDb.all(
+          'SELECT * FROM lessons WHERE topic_id = ? ORDER BY order_index',
+          [topicId],
+          (err, rows) => {
+            if (err) {
+              console.error('Error getting lessons by topic ID:', err.message);
+              return reject(err);
+            }
+            resolve({ results: rows });
+          }
+        );
+      });
+    },
+    
+    // Problem functions
+    async getProblemsByTopicId(topicId) {
+      return new Promise((resolve, reject) => {
+        sqliteDb.all(
+          'SELECT * FROM problems WHERE topic_id = ?',
+          [topicId],
+          (err, rows) => {
+            if (err) {
+              console.error('Error getting problems by topic ID:', err.message);
+              return reject(err);
+            }
+            resolve({ results: rows });
+          }
+        );
+      });
+    },
+    
+    // User progress functions
+    async getUserProgress(userId) {
+      return new Promise((resolve, reject) => {
+        sqliteDb.all(
+          `SELECT up.*, l.title as lesson_title, t.title as topic_title, c.title as course_title
+           FROM user_progress up
+           LEFT JOIN lessons l ON up.lesson_id = l.id
+           LEFT JOIN topics t ON l.topic_id = t.id
+           LEFT JOIN courses c ON t.course_id = c.id
+           WHERE up.user_id = ?
+           ORDER BY up.completed_at DESC`,
+          [userId],
+          (err, rows) => {
+            if (err) {
+              console.error('Error getting user progress:', err.message);
+              return reject(err);
+            }
+            resolve({ results: rows || [] });
+          }
+        );
+      });
+    },
+    
+    async getUserXPHistory(userId) {
+      return new Promise((resolve, reject) => {
+        sqliteDb.all(
+          'SELECT * FROM xp_history WHERE user_id = ? ORDER BY earned_at DESC',
+          [userId],
+          (err, rows) => {
+            if (err) {
+              console.error('Error getting user XP history:', err.message);
+              return reject(err);
+            }
+            resolve({ results: rows || [] });
+          }
+        );
+      });
+    },
+    
+    // Helper function to close the database connection
+    close() {
+      sqliteDb.close((err) => {
+        if (err) {
+          console.error('Error closing database:', err.message);
+        } else {
+          console.log('Database connection closed');
+        }
+      });
+    }
+  };
+}
 
-if (typeof window !== 'undefined' || !sqliteDb) {
-  const mockDb = {
+function createMockDatabaseAPI(courseId = null) {
+  console.log(`Using mock database API for ${courseId ? `course ${courseId}` : 'default database'}`);
+  
+  return {
+    courseId,
+    
     // User functions
     async createUser(userData) {
       console.log('Mock: Creating user', userData);
@@ -391,13 +434,13 @@ if (typeof window !== 'undefined' || !sqliteDb) {
     },
     
     async getCourseById(id) {
-      console.log('Mock: Getting course by ID', id);
+      console.log(`Mock: Getting course by ID ${id} from ${this.courseId ? `course-specific database for course ${this.courseId}` : 'default database'}`);
       return null;
     },
     
     // Topic functions
     async getTopicsByCourseId(courseId) {
-      console.log('Mock: Getting topics by course ID', courseId);
+      console.log(`Mock: Getting topics by course ID ${courseId} from ${this.courseId ? `course-specific database for course ${this.courseId}` : 'default database'}`);
       return { results: [] };
     },
     
@@ -429,8 +472,15 @@ if (typeof window !== 'undefined' || !sqliteDb) {
       console.log('Mock: Closing database connection');
     }
   };
-  
-  module.exports = mockDb;
-} else {
-  module.exports = db;
 }
+
+if (typeof window === 'undefined') {
+  initializeDatabase().then(dbInstance => {
+    defaultDb = dbInstance;
+  }).catch(error => {
+    console.error('Failed to initialize default database:', error.message);
+  });
+}
+
+module.exports = defaultDb || createMockDatabaseAPI();
+module.exports.initializeDatabase = initializeDatabase;
