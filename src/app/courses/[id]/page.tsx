@@ -181,13 +181,6 @@ Linear equations are equations where the variable has a degree of 1 (no exponent
       setSectionResults(prev => ({ ...prev, [sectionId]: isCorrect }));
       setShowExplanation(prev => ({ ...prev, [sectionId]: true }));
       
-      const currentIndex = course.sections.findIndex(s => s.id === sectionId);
-      if (currentIndex < course.sections.length - 1) {
-        const timer = setTimeout(() => {
-          setCurrentSectionIndex(currentIndex + 1);
-        }, 1500);
-        setAutoAdvanceTimer(timer);
-      }
     }
   };
 
@@ -333,8 +326,13 @@ Linear equations are equations where the variable has a degree of 1 (no exponent
                       <div className="font-bold mb-2">
                         {sectionResults[currentSection.id] ? 'Correct!' : 'Incorrect!'}
                       </div>
-                      <div>
+                      <div className="mb-4">
                         {currentSection.explanation}
+                      </div>
+                      <div className="flex justify-end mt-4">
+                        <Button onClick={handleNextSection}>
+                          Next
+                        </Button>
                       </div>
                     </div>
                   )}
