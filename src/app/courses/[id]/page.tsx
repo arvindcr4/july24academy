@@ -37,8 +37,10 @@ export default function CourseDetail() {
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [sectionResults, setSectionResults] = useState<Record<string, boolean>>({});
   const [showExplanation, setShowExplanation] = useState<Record<string, boolean>>({});
+  const [autoAdvanceTimer, setAutoAdvanceTimer] = useState<NodeJS.Timeout | null>(null);
   
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const contentContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -163,13 +165,12 @@ Linear equations are equations where the variable has a degree of 1 (no exponent
   }, [courseId]);
 
   useEffect(() => {
-    if (course && sectionRefs.current[course.sections[currentSectionIndex]?.id]) {
-      sectionRefs.current[course.sections[currentSectionIndex]?.id]?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start'
-      });
-    }
-  }, [currentSectionIndex, course]);
+    return () => {
+      if (autoAdvanceTimer) {
+        clearTimeout(autoAdvanceTimer);
+      }
+    };
+  }, [autoAdvanceTimer]);
 
   const handleAnswerSelect = (sectionId: string, answer: string) => {
     setUserAnswers(prev => ({ ...prev, [sectionId]: answer }));
@@ -180,13 +181,12 @@ Linear equations are equations where the variable has a degree of 1 (no exponent
       setSectionResults(prev => ({ ...prev, [sectionId]: isCorrect }));
       setShowExplanation(prev => ({ ...prev, [sectionId]: true }));
       
-      if (isCorrect) {
-        const currentIndex = course.sections.findIndex(s => s.id === sectionId);
-        if (currentIndex < course.sections.length - 1) {
-          setTimeout(() => {
-            setCurrentSectionIndex(currentIndex + 1);
-          }, 1500);
-        }
+      const currentIndex = course.sections.findIndex(s => s.id === sectionId);
+      if (currentIndex < course.sections.length - 1) {
+        const timer = setTimeout(() => {
+          setCurrentSectionIndex(currentIndex + 1);
+        }, 1500);
+        setAutoAdvanceTimer(timer);
       }
     }
   };
@@ -203,10 +203,9 @@ Linear equations are equations where the variable has a degree of 1 (no exponent
     }
   };
 
-  const handleContinue = (sectionId: string) => {
-    const nextIndex = course?.sections.findIndex(s => s.id === sectionId) ?? 0;
-    if (nextIndex < (course?.sections.length ?? 0) - 1) {
-      setCurrentSectionIndex(nextIndex + 1);
+  const handleContinue = () => {
+    if (course && currentSectionIndex < course.sections.length - 1) {
+      setCurrentSectionIndex(currentSectionIndex + 1);
     }
   };
 
@@ -238,6 +237,7 @@ Linear equations are equations where the variable has a degree of 1 (no exponent
     section.completed || (section.type === 'question' && sectionResults[section.id] === true)
   ).length;
   const progressPercentage = Math.round((completedSections / course.sections.length) * 100);
+  const currentSection = course.sections[currentSectionIndex];
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -287,71 +287,60 @@ Linear equations are equations where the variable has a degree of 1 (no exponent
             </Button>
           </div>
           
-          <div className="space-y-12">
-            {course.sections.map((section, index) => (
-              <div 
-                key={section.id} 
-                ref={el => sectionRefs.current[section.id] = el}
-                className={`p-6 rounded-lg border ${
-                  index === currentSectionIndex 
-                    ? 'border-blue-500 shadow-lg' 
-                    : 'border-gray-200'
-                }`}
-              >
-                <h2 className="text-2xl font-bold mb-4">{section.title}</h2>
-                
-                {section.type === 'content' && (
-                  <div className="prose max-w-none mb-6">
-                    <div dangerouslySetInnerHTML={{ __html: section.content?.replace(/\n/g, '<br>') || '' }} />
-                    <div className="mt-6 flex justify-end">
-                      <Button onClick={() => handleContinue(section.id)}>
-                        Continue
-                      </Button>
-                    </div>
+          <div ref={contentContainerRef} className="min-h-[400px] relative">
+            <div 
+              key={currentSection.id} 
+              ref={el => sectionRefs.current[currentSection.id] = el}
+              className="p-6 rounded-lg border border-blue-500 shadow-lg"
+            >
+              <h2 className="text-2xl font-bold mb-4">{currentSection.title}</h2>
+              
+              {currentSection.type === 'content' && (
+                <div className="prose max-w-none mb-6">
+                  <div dangerouslySetInnerHTML={{ __html: currentSection.content?.replace(/\n/g, '<br>') || '' }} />
+                  <div className="mt-6 flex justify-end">
+                    <Button onClick={handleContinue}>
+                      Continue
+                    </Button>
                   </div>
-                )}
-                
-                {section.type === 'question' && (
-                  <div className="bg-gray-50 p-6 rounded-lg">
-                    <h3 className="text-xl font-medium mb-4">{section.question}</h3>
-                    
-                    <div className="space-y-3">
-                      {section.options?.map((option) => (
-                        <div 
-                          key={option}
-                          className={`p-3 rounded-lg border cursor-pointer ${
-                            userAnswers[section.id] === option 
-                              ? sectionResults[section.id] 
-                                ? 'bg-green-100 border-green-500' 
-                                : 'bg-red-100 border-red-500'
-                              : 'border-gray-300 hover:border-blue-500'
-                          }`}
-                          onClick={() => handleAnswerSelect(section.id, option)}
-                        >
-                          {option}
-                        </div>
-                      ))}
-                    </div>
-                    
-                    {showExplanation[section.id] && (
-                      <div className={`mt-6 p-4 rounded-lg ${sectionResults[section.id] ? 'bg-green-100' : 'bg-red-100'}`}>
-                        <div className="font-bold mb-2">
-                          {sectionResults[section.id] ? 'Correct!' : 'Incorrect!'}
-                        </div>
-                        <div>
-                          {section.explanation}
-                        </div>
-                        {!sectionResults[section.id] && (
-                          <div className="mt-4 text-sm text-gray-600">
-                            Try again or use the navigation buttons to continue.
-                          </div>
-                        )}
+                </div>
+              )}
+              
+              {currentSection.type === 'question' && (
+                <div className="bg-gray-50 p-6 rounded-lg">
+                  <h3 className="text-xl font-medium mb-4">{currentSection.question}</h3>
+                  
+                  <div className="space-y-3">
+                    {currentSection.options?.map((option) => (
+                      <div 
+                        key={option}
+                        className={`p-3 rounded-lg border cursor-pointer ${
+                          userAnswers[currentSection.id] === option 
+                            ? sectionResults[currentSection.id] 
+                              ? 'bg-green-100 border-green-500' 
+                              : 'bg-red-100 border-red-500'
+                            : 'border-gray-300 hover:border-blue-500'
+                        }`}
+                        onClick={() => handleAnswerSelect(currentSection.id, option)}
+                      >
+                        {option}
                       </div>
-                    )}
+                    ))}
                   </div>
-                )}
-              </div>
-            ))}
+                  
+                  {showExplanation[currentSection.id] && (
+                    <div className={`mt-6 p-4 rounded-lg ${sectionResults[currentSection.id] ? 'bg-green-100' : 'bg-red-100'}`}>
+                      <div className="font-bold mb-2">
+                        {sectionResults[currentSection.id] ? 'Correct!' : 'Incorrect!'}
+                      </div>
+                      <div>
+                        {currentSection.explanation}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
