@@ -1,3 +1,5 @@
+"use client";
+
 import { AuthenticatedNavigation } from '@/components/ui/navigation';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
