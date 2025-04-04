@@ -479,14 +479,95 @@ function createMockDatabaseAPI(courseId = null) {
   };
 }
 
-let db = createMockDatabaseAPI();
+const mockDb = createMockDatabaseAPI();
+
+const db = {
+  _realDb: mockDb,
+  _initializing: false,
+  _initialized: false,
+  
+  async _ensureInitialized() {
+    if (this._initialized) {
+      return this._realDb;
+    }
+    
+    if (!this._initializing && typeof window === 'undefined') {
+      this._initializing = true;
+      try {
+        this._realDb = await initializeDatabase();
+        console.log('Real database initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize database:', error.message);
+        this._realDb = mockDb;
+      } finally {
+        this._initialized = true;
+        this._initializing = false;
+      }
+    }
+    
+    return this._realDb;
+  },
+  
+  async createUser(...args) {
+    const db = await this._ensureInitialized();
+    return db.createUser(...args);
+  },
+  
+  async getUserByEmail(...args) {
+    const db = await this._ensureInitialized();
+    return db.getUserByEmail(...args);
+  },
+  
+  async getUserById(...args) {
+    const db = await this._ensureInitialized();
+    return db.getUserById(...args);
+  },
+  
+  async getAllCourses(...args) {
+    const db = await this._ensureInitialized();
+    return db.getAllCourses(...args);
+  },
+  
+  async getCourseById(...args) {
+    const db = await this._ensureInitialized();
+    return db.getCourseById(...args);
+  },
+  
+  async getTopicsByCourseId(...args) {
+    const db = await this._ensureInitialized();
+    return db.getTopicsByCourseId(...args);
+  },
+  
+  async getLessonsByTopicId(...args) {
+    const db = await this._ensureInitialized();
+    return db.getLessonsByTopicId(...args);
+  },
+  
+  async getProblemsByTopicId(...args) {
+    const db = await this._ensureInitialized();
+    return db.getProblemsByTopicId(...args);
+  },
+  
+  async getUserProgress(...args) {
+    const db = await this._ensureInitialized();
+    return db.getUserProgress(...args);
+  },
+  
+  async getUserXPHistory(...args) {
+    const db = await this._ensureInitialized();
+    return db.getUserXPHistory(...args);
+  },
+  
+  close() {
+    if (this._realDb && typeof this._realDb.close === 'function') {
+      this._realDb.close();
+    }
+  }
+};
 
 if (typeof window === 'undefined') {
-  initializeDatabase().then(result => {
-    db = result;
-    console.log('Real database initialized successfully');
-  }).catch(error => {
-    console.error('Failed to initialize default database:', error.message);
+  db._ensureInitialized().catch(error => {
+    console.error('Background database initialization failed:', error.message);
   });
 }
 
