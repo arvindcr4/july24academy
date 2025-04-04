@@ -51,11 +51,20 @@ export default function CourseDetail() {
         const courseDb = await getCourseDb(parseInt(courseId));
         console.log(`Using course-specific database for course ${courseId}`);
         
-        const courseData = await courseDb.getCourseById(parseInt(courseId));
+        let courseData = await courseDb.getCourseById(parseInt(courseId));
+        console.log('Course data from course-specific DB:', courseData);
+        
         if (!courseData) {
-          console.error(`Course with ID ${courseId} not found`);
-          setLoading(false);
-          return;
+          console.log('Course not found in course-specific database, trying default database');
+          const defaultDb = await getCourseDb();
+          courseData = await defaultDb.getCourseById(parseInt(courseId));
+          console.log('Course data from default DB:', courseData);
+          
+          if (!courseData) {
+            console.error(`Course with ID ${courseId} not found in any database`);
+            setLoading(false);
+            return;
+          }
         }
         
         const topicsResponse = await courseDb.getTopicsByCourseId(parseInt(courseId));

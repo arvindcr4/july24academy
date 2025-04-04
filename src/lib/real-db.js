@@ -440,7 +440,42 @@ function createMockDatabaseAPI(courseId = null) {
     
     async getCourseById(id) {
       console.log(`Mock: Getting course by ID ${id} from ${this.courseId ? `course-specific database for course ${this.courseId}` : 'default database'}`);
-      return null;
+      
+      const mockCourses = [
+        {
+          id: 1,
+          title: 'Algebra Fundamentals',
+          description: 'Master the core concepts of algebra, from equations to functions and beyond.',
+          image_url: '/images/algebra.png',
+          difficulty_level: 'Beginner',
+          category_id: 1,
+          order_index: 1,
+          created_at: new Date().toISOString()
+        },
+        {
+          id: 2,
+          title: 'Calculus I',
+          description: 'Learn the fundamentals of calculus including limits, derivatives, and integrals.',
+          image_url: '/images/calculus.png',
+          difficulty_level: 'Intermediate',
+          category_id: 1,
+          order_index: 2,
+          created_at: new Date().toISOString()
+        },
+        {
+          id: 3,
+          title: 'Data Structures & Algorithms',
+          description: 'Master essential data structures and algorithms for efficient problem-solving.',
+          image_url: '/images/dsa.png',
+          difficulty_level: 'Advanced',
+          category_id: 2,
+          order_index: 3,
+          created_at: new Date().toISOString()
+        }
+      ];
+      
+      const course = mockCourses.find(c => c.id === id);
+      return course || null;
     },
     
     // Topic functions
