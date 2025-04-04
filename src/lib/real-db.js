@@ -479,10 +479,16 @@ function createMockDatabaseAPI(courseId = null) {
   };
 }
 
+let db = createMockDatabaseAPI();
+
 if (typeof window === 'undefined') {
   initializeDatabase().then(result => {
     db = result;
+    console.log('Real database initialized successfully');
+  }).catch(error => {
+    console.error('Failed to initialize default database:', error.message);
   });
 }
 
+export { initializeDatabase };
 export default db;
