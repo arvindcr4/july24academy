@@ -5,6 +5,7 @@ import { Button, ProgressBar, Badge } from '@/components/ui';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { getCourseDb } from '@/lib/db';
+import AIQuestion from '@/components/ai-question';
 
 interface Section {
   id: string;
@@ -16,6 +17,10 @@ interface Section {
   correct_answer?: string;
   explanation?: string;
   completed: boolean;
+  useAI?: boolean;
+  courseTitle?: string;
+  topicTitle?: string;
+  difficulty?: string;
 }
 
 interface CourseData {
@@ -142,8 +147,31 @@ export default function CourseDetail() {
               correct_answer: "Correct option",
               explanation: "This is a sample explanation for the correct answer.",
               completed: false
+            },
+            {
+              id: 'ai-question-1',
+              type: 'question',
+              title: 'AI-Generated Question',
+              useAI: true,
+              courseTitle: courseData.title,
+              topicTitle: 'Introduction',
+              difficulty: courseData.difficulty_level,
+              completed: false
             }
           );
+        }
+        
+        if (!sections.some(section => section.useAI)) {
+          sections.push({
+            id: `ai-question-${Date.now()}`,
+            type: 'question',
+            title: 'AI-Generated Question',
+            useAI: true,
+            courseTitle: courseData.title,
+            topicTitle: sections.length > 0 ? sections[0].title : 'Course Concepts',
+            difficulty: courseData.difficulty_level,
+            completed: false
+          });
         }
         
         const finalCourseData: CourseData = {
@@ -183,6 +211,16 @@ export default function CourseDetail() {
               options: ["Only positive numbers", "Unknown values or quantities", "Only integers", "Only decimal numbers"],
               correct_answer: "Unknown values or quantities",
               explanation: "Variables in algebra are symbols (usually letters) that represent unknown values or quantities in mathematical expressions and equations.",
+              completed: false
+            },
+            {
+              id: 'ai-question-1',
+              type: 'question',
+              title: 'AI-Generated Algebra Question',
+              useAI: true,
+              courseTitle: 'Algebra Fundamentals',
+              topicTitle: 'Introduction to Algebra',
+              difficulty: 'Beginner',
               completed: false
             }
           ]
@@ -337,7 +375,7 @@ export default function CourseDetail() {
                 </div>
               )}
               
-              {currentSection.type === 'question' && (
+              {currentSection.type === 'question' && !currentSection.useAI && (
                 <div className="bg-gray-50 p-6 rounded-lg">
                   <h3 className="text-xl font-medium mb-4">{currentSection.question}</h3>
                   
@@ -375,6 +413,20 @@ export default function CourseDetail() {
                     </div>
                   )}
                 </div>
+              )}
+              
+              {currentSection.type === 'question' && currentSection.useAI && (
+                <AIQuestion
+                  courseTitle={currentSection.courseTitle || course.title}
+                  topicTitle={currentSection.topicTitle || currentSection.title}
+                  difficulty={currentSection.difficulty || course.difficulty_level}
+                  previousContent={currentSection.content || ''}
+                  onAnswerSubmit={(correct) => {
+                    setSectionResults(prev => ({ ...prev, [currentSection.id]: correct }));
+                  }}
+                  onNext={handleNextSection}
+                  showNext={true}
+                />
               )}
             </div>
           </div>
