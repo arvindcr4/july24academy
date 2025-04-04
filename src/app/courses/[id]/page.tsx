@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Button, ProgressBar, Badge } from '@/components/ui';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { getCourseDb } from '@/lib/db';
 
 interface Section {
   id: string;
@@ -47,115 +48,147 @@ export default function CourseDetail() {
       try {
         setLoading(true);
         
-        const courseData: CourseData = {
+        const courseDb = await getCourseDb(parseInt(courseId));
+        console.log(`Using course-specific database for course ${courseId}`);
+        
+        let courseData = await courseDb.getCourseById(parseInt(courseId));
+        console.log('Course data from course-specific DB:', courseData);
+        
+        if (!courseData) {
+          console.log('Course not found in course-specific database, trying default database');
+          const defaultDb = await getCourseDb();
+          courseData = await defaultDb.getCourseById(parseInt(courseId));
+          console.log('Course data from default DB:', courseData);
+          
+          if (!courseData) {
+            console.error(`Course with ID ${courseId} not found in any database`);
+            setLoading(false);
+            return;
+          }
+        }
+        
+        const topicsResponse = await courseDb.getTopicsByCourseId(parseInt(courseId));
+        const topics = topicsResponse.results || [];
+        
+        const sections: Section[] = [];
+        
+        for (const topic of topics) {
+          sections.push({
+            id: `topic-${topic.id}`,
+            type: 'content',
+            title: topic.title,
+            content: topic.description || `# ${topic.title}\n\nThis is the content for ${topic.title}.`,
+            completed: false
+          });
+          
+          const lessonsResponse = await courseDb.getLessonsByTopicId(topic.id);
+          const lessons = lessonsResponse.results || [];
+          
+          for (const lesson of lessons) {
+            sections.push({
+              id: `lesson-${lesson.id}`,
+              type: 'content',
+              title: lesson.title,
+              content: lesson.content || `# ${lesson.title}\n\nThis is the content for ${lesson.title}.`,
+              completed: false
+            });
+          }
+          
+          const problemsResponse = await courseDb.getProblemsByTopicId(topic.id);
+          const problems = problemsResponse.results || [];
+          
+          for (const problem of problems) {
+            let options = ["Option A", "Option B", "Option C", "Option D"];
+            try {
+              if (problem.constraints) {
+                const parsedConstraints = JSON.parse(problem.constraints);
+                if (Array.isArray(parsedConstraints.options)) {
+                  options = parsedConstraints.options;
+                }
+              }
+            } catch (e) {
+              console.error('Error parsing problem constraints:', e);
+            }
+            
+            sections.push({
+              id: `problem-${problem.id}`,
+              type: 'question',
+              title: problem.title,
+              question: problem.description || `Question about ${problem.title}`,
+              options: options,
+              correct_answer: options[0], // Default to first option as correct
+              explanation: problem.solution || `Explanation for ${problem.title}`,
+              completed: false
+            });
+          }
+        }
+        
+        if (sections.length === 0) {
+          console.log('No course content found, using mock data');
+          sections.push(
+            {
+              id: 'section-1',
+              type: 'content',
+              title: 'Introduction to the Course',
+              content: `# Introduction to ${courseData.title}\n\nWelcome to this course! This is a placeholder content since no actual course content was found in the database.`,
+              completed: false
+            },
+            {
+              id: 'question-1',
+              type: 'question',
+              title: 'Sample Question',
+              question: "This is a sample question. Which option is correct?",
+              options: ["Correct option", "Wrong option 1", "Wrong option 2", "Wrong option 3"],
+              correct_answer: "Correct option",
+              explanation: "This is a sample explanation for the correct answer.",
+              completed: false
+            }
+          );
+        }
+        
+        const finalCourseData: CourseData = {
+          id: parseInt(courseId),
+          title: courseData.title || 'Course Title',
+          description: courseData.description || 'Course Description',
+          difficulty_level: courseData.difficulty_level || 'Beginner',
+          estimated_hours: courseData.estimated_hours || 40,
+          completion_percentage: 0,
+          sections: sections
+        };
+        
+        setCourse(finalCourseData);
+      } catch (error) {
+        console.error('Error fetching course data:', error);
+        
+        const mockCourseData: CourseData = {
           id: parseInt(courseId),
           title: 'Algebra Fundamentals',
           description: 'Master the core concepts of algebra, from equations to functions and beyond.',
           difficulty_level: 'Beginner',
           estimated_hours: 40,
-          completion_percentage: 65,
+          completion_percentage: 0,
           sections: [
             {
               id: 'section-1',
               type: 'content',
               title: 'Introduction to Algebra',
-              content: `
-# Introduction to Algebra
-
-Algebra is a branch of mathematics that uses symbols and letters to represent numbers and quantities in formulas and equations.
-
-## Key Concepts
-
-- **Variables**: Letters that represent unknown values
-- **Constants**: Fixed values that don't change
-- **Expressions**: Combinations of variables and constants using operations
-- **Equations**: Mathematical statements that assert the equality of two expressions
-              `,
-              completed: true
+              content: `# Introduction to Algebra\n\nAlgebra is a branch of mathematics that uses symbols and letters to represent numbers and quantities in formulas and equations.`,
+              completed: false
             },
             {
               id: 'question-1',
               type: 'question',
               title: 'Variables in Algebra',
               question: "What do variables represent in algebra?",
-              options: [
-                "Only positive numbers", 
-                "Unknown values or quantities", 
-                "Only integers", 
-                "Only decimal numbers"
-              ],
+              options: ["Only positive numbers", "Unknown values or quantities", "Only integers", "Only decimal numbers"],
               correct_answer: "Unknown values or quantities",
               explanation: "Variables in algebra are symbols (usually letters) that represent unknown values or quantities in mathematical expressions and equations.",
-              completed: false
-            },
-            {
-              id: 'section-2',
-              type: 'content',
-              title: 'Basic Algebraic Equations',
-              content: `
-## Example
-
-The equation \`x + 5 = 10\` uses a variable \`x\` to represent an unknown value.
-To solve this equation, we need to find the value of \`x\` that makes the equation true.
-
-\`\`\`
-x + 5 = 10
-x = 10 - 5
-x = 5
-\`\`\`
-
-Therefore, \`x = 5\` is the solution to the equation.
-              `,
-              completed: false
-            },
-            {
-              id: 'question-2',
-              type: 'question',
-              title: 'Solving Equations',
-              question: "Solve for x: 2x + 5 = 15",
-              options: ["x = 5", "x = 10", "x = 7.5", "x = 3"],
-              correct_answer: "x = 5",
-              explanation: "To solve 2x + 5 = 15, subtract 5 from both sides to get 2x = 10, then divide both sides by 2 to get x = 5.",
-              completed: false
-            },
-            {
-              id: 'section-3',
-              type: 'content',
-              title: 'Solving Linear Equations',
-              content: `
-# Solving Linear Equations
-
-Linear equations are equations where the variable has a degree of 1 (no exponents).
-
-## Steps to Solve Linear Equations
-
-1. Simplify each side of the equation by combining like terms
-2. Use addition or subtraction to isolate the variable term on one side
-3. Use multiplication or division to solve for the variable
-              `,
-              completed: false
-            },
-            {
-              id: 'question-3',
-              type: 'question',
-              title: 'Linear Equations',
-              question: "Which of the following is a linear equation?",
-              options: [
-                "y = x²", 
-                "y = 3x + 2", 
-                "y = 1/x", 
-                "y = √x"
-              ],
-              correct_answer: "y = 3x + 2",
-              explanation: "A linear equation has variables with a degree of 1 (no exponents). The equation y = 3x + 2 is linear because x has a degree of 1.",
               completed: false
             }
           ]
         };
         
-        setCourse(courseData);
-      } catch (error) {
-        console.error('Error fetching course data:', error);
+        setCourse(mockCourseData);
       } finally {
         setLoading(false);
       }
@@ -173,6 +206,10 @@ Linear equations are equations where the variable has a degree of 1 (no exponent
   }, [autoAdvanceTimer]);
 
   const handleAnswerSelect = (sectionId: string, answer: string) => {
+    if (userAnswers[sectionId]) {
+      return;
+    }
+    
     setUserAnswers(prev => ({ ...prev, [sectionId]: answer }));
     
     const section = course?.sections.find(s => s.id === sectionId);
@@ -181,6 +218,7 @@ Linear equations are equations where the variable has a degree of 1 (no exponent
       setSectionResults(prev => ({ ...prev, [sectionId]: isCorrect }));
       setShowExplanation(prev => ({ ...prev, [sectionId]: true }));
       
+      console.log(`Answer selected: ${answer}, correct: ${isCorrect}, waiting for user to click Next`);
     }
   };
 
