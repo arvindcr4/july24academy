@@ -1,6 +1,11 @@
-import { cn } from '@/lib/utils';
+"use client";
+
 import Link from 'next/link';
 import React from 'react';
+
+function cn(...classes: (string | undefined)[]) {
+  return classes.filter(Boolean).join(' ');
+}
 
 interface NavigationProps {
   className?: string;

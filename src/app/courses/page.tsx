@@ -7,9 +7,41 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui';
 import { Badge } from '@/components/ui';
 import { useState, useEffect } from 'react';
 
+interface Category {
+  id: string;
+  name: string;
+}
+
+interface Tag {
+  id: number;
+  name: string;
+}
+
+interface Author {
+  name: string;
+}
+
+interface Enrollment {
+  completion_percentage: number;
+}
+
+interface Course {
+  id: number;
+  title: string;
+  description: string;
+  difficulty_level: string;
+  estimated_hours: number;
+  topicsCount: number;
+  lessonsCount: number;
+  tags: Tag[];
+  authors: Author[];
+  category: string;
+  enrollment: Enrollment | null;
+}
+
 export default function Courses() {
-  const [categories, setCategories] = useState([]);
-  const [courses, setCourses] = useState([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('all');
 
